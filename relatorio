@@ -1,0 +1,333 @@
+*&---------------------------------------------------------------------*
+*& Report ZR_FSW_CASE_RMORAES
+*&---------------------------------------------------------------------*
+*&
+*&---------------------------------------------------------------------*
+REPORT zr_fsw_case_rmoraes.
+*************************************************
+*------------- Declaração de estrutura internas------
+*************************************************
+DATA: gt_likp      TYPE TABLE OF zst_fsw_case_rmoraes,
+      gt_lips      TYPE TABLE OF zst_fsw_case_rmoraes_lips,
+      gt_likp_lips TYPE TABLE OF zst_fsw_case_rmoraes_likp_lips,
+      gt_lfa1      TYPE TABLE OF zst_fsw_case_rmoraes_lfa1,
+      gt_usr21     TYPE TABLE OF zst_fsw_case_rmoraes_usr21,
+      gt_sum       TYPE TABLE OF zst_fsw_case_rmoraes_sum,
+      gt_fieldcat  TYPE lvc_t_fcat.
+
+DATA: gs_likp      TYPE zst_fsw_case_rmoraes,
+      gs_lips      TYPE zst_fsw_case_rmoraes_lips,
+      gs_likp_lips TYPE zst_fsw_case_rmoraes_likp_lips,
+      gs_lfa1      TYPE zst_fsw_case_rmoraes_lfa1,
+      gs_sum       TYPE zst_fsw_case_rmoraes_sum,
+      gs_usr21     TYPE zst_fsw_case_rmoraes_usr21.
+
+*---------------------------------------------------------------------
+***************DECLARAÇÃO DE TABELAS ALV*****************************
+*---------------------------------------------------------------------
+DATA: "ariáveis utilizadas no ALV
+  gs_fieldcat TYPE lvc_s_fcat,
+  gs_sort     TYPE lvc_s_sort,
+  gs_layout   TYPE lvc_s_layo,
+  gs_print    TYPE lvc_s_prnt.
+
+SELECTION-SCREEN BEGIN OF BLOCK b1 WITH FRAME TITLE TEXT-001.
+*---------------------------------------------
+*--------------Tela com select-options-------
+*---------------------------------------------
+  SELECT-OPTIONS: s_vbeln FOR gs_likp-vbeln,
+                  s_lfdat FOR gs_likp-lfdat,
+                  s_lifnr FOR gs_likp-lifnr,
+                  s_matnr FOR gs_lips-matnr,
+          s_pstyv FOR gs_lips-pstyv.
+SELECTION-SCREEN END OF BLOCK b1.
+
+
+SELECTION-SCREEN BEGIN OF BLOCK b2 WITH FRAME TITLE TEXT-002.
+  PARAMETERS: p_reme TYPE c AS CHECKBOX DEFAULT'X'.
+SELECTION-SCREEN END OF BLOCK b2.
+
+
+*--------------------------------------------------
+************** Performs****************
+*--------------------------------------------------
+PERFORM zf_selecionar_dados.
+PERFORM zf_processar_dados.
+
+*---------------------------------------------------
+**********TELA*******************************
+*---------------------------------------------------
+
+IF gs_likp_lips IS NOT INITIAL.
+  CALL SCREEN '0100'.
+ELSE.
+  MESSAGE 'DADOS NÃO ENCONTRAD' TYPE 'S' DISPLAY LIKE 'E'.
+  RETURN.
+ENDIF.
+
+INCLUDE zr_fsw_case_rmoraes_pbo100.
+
+INCLUDE zr_fsw_case_rmoraes_pai0100.
+
+
+*&---------------------------------------------------------------------*
+*& Form zf_selecionar_dados
+*&---------------------------------------------------------------------*
+*& text
+*&---------------------------------------------------------------------*
+*& -->  p1        text
+*& <--  p2        text
+*&---------------------------------------------------------------------*
+FORM zf_selecionar_dados .
+
+  SELECT vbeln lfdat lifnr vbtyp ernam
+    FROM likp
+    INTO TABLE gt_likp
+    WHERE vbeln IN s_vbeln
+      AND lfdat IN s_lfdat
+      AND lifnr IN s_lifnr.
+
+  IF sy-subrc IS INITIAL.
+
+    SELECT vbeln posnr matnr pstyv volum voleh lfimg meins werks
+      FROM lips
+      INTO TABLE gt_lips
+      FOR ALL ENTRIES IN gt_likp
+      WHERE vbeln = gt_likp-vbeln
+      AND matnr IN s_matnr
+      AND pstyv IN s_pstyv.
+
+    SELECT lifnr name1
+      FROM lfa1
+      INTO TABLE gt_lfa1
+      FOR ALL ENTRIES IN gt_likp
+      WHERE lifnr = gt_likp-lifnr.
+
+    SELECT bname techdesc
+      FROM usr21
+      INTO TABLE gt_usr21
+      FOR ALL ENTRIES IN gt_likp
+      WHERE bname = gt_likp-ernam.
+
+  ENDIF.
+
+*  SELECT vbeln, lfdat, lifnr, vbtyp, ernam
+*    FROM likp
+*    INTO TABLE data@(gt_likp2)
+*    WHERE vbeln IN @s_vbeln
+*      AND lfdat IN @s_lfdat
+*      AND lifnr IN @s_lifnr.
+*
+*  IF sy-subrc IS INITIAL.
+
+*    SELECT  vbeln, posnr, matnr, pstyv, volum, voleh, lfimg, meins, werks
+*      FROM lips
+*      INTO TABLE @data(gt_lips2)
+*      FOR ALL ENTRIES IN @gt_likp2
+*      WHERE vbeln = @gt_likp2-vbeln.
+*
+*
+*      SELECT lifnr, name1
+*        FROM lfa1
+*        INTO TABLE @data(gt_lfa1a)
+*        FOR ALL ENTRIES IN @gt_likp2
+*        WHERE lifnr = @gt_likp2-lifnr.
+
+*      SELECT bname, techdesc
+*        FROM usr21
+*        INTO TABLE @data(gt_usr21a)
+*        FOR ALL ENTRIES IN @gt_likp2_lips2
+*        WHERE bname = #gt_likp2-ernam.
+
+*  ENDIF.
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& Form zf_processar_dados
+*&---------------------------------------------------------------------*
+*& text
+*&---------------------------------------------------------------------*
+*& -->  p1        text
+*& <--  p2        text
+*&---------------------------------------------------------------------*
+FORM zf_processar_dados .
+
+  DATA: lv_nome    TYPE zst_fsw_case_rmoraes_lfa1-name1,
+        lv_usrnome TYPE zst_fsw_case_rmoraes-ernam,
+        lv_result  TYPE zst_fsw_case_rmoraes_likp_lips-techdesc.
+
+
+
+  SORT gt_likp BY vbeln.
+  SORT gt_lips BY vbeln posnr.
+
+  LOOP AT gt_likp INTO gs_likp.
+
+    READ TABLE gt_lips
+        WITH KEY vbeln = gs_likp-vbeln TRANSPORTING NO FIELDS BINARY SEARCH.
+    IF sy-subrc IS INITIAL.
+      " lv_index = sy-tabix.
+      LOOP AT gt_lips INTO gs_lips FROM sy-tabix.
+
+        IF gs_lips-vbeln <> gs_likp-vbeln.
+          EXIT.
+        ENDIF.
+
+        gs_likp_lips-vbeln = gs_likp-vbeln.
+        gs_likp_lips-lfdat = gs_likp-lfdat.
+        gs_likp_lips-lifnr = gs_likp-lifnr.
+        gs_likp_lips-vbtyp = gs_likp-vbtyp.
+        gs_likp_lips-ernam = gs_likp-ernam.
+
+        gs_likp_lips-posnr = gs_lips-posnr.
+        gs_likp_lips-matnr = gs_lips-matnr.
+        gs_likp_lips-pstyv = gs_lips-pstyv.
+        gs_likp_lips-volum = gs_lips-volum.
+        gs_likp_lips-voleh = gs_lips-voleh.
+        gs_likp_lips-lfimg = gs_lips-lfimg.
+        gs_likp_lips-meins = gs_lips-meins.
+        gs_likp_lips-werks = gs_lips-werks.
+
+        IF gs_lips-volum IS INITIAL AND p_reme IS NOT INITIAL.
+          gs_likp_lips-color = 'C611'.
+
+
+        ENDIF.
+        APPEND gs_likp_lips TO gt_likp_lips.
+        CLEAR gs_likp_lips.
+      ENDLOOP.
+    ENDIF.
+  ENDLOOP.
+
+  LOOP AT gt_likp_lips INTO gs_likp_lips.
+    gs_sum-vbeln = gs_likp_lips-vbeln.
+    gs_sum-lfimg = gs_likp_lips-lfimg.
+
+    COLLECT gs_sum INTO gt_sum.
+    CLEAR gt_sum.
+
+  ENDLOOP.
+
+  FIELD-SYMBOLS <fs_likp_lips> TYPE zst_fsw_case_rmoraes_likp_lips.
+  LOOP AT gt_likp_lips ASSIGNING <fs_likp_lips>.
+
+    READ TABLE gt_sum
+      INTO gs_sum
+      WITH KEY vbeln = <fs_likp_lips>-vbeln.
+    IF sy-subrc IS INITIAL.
+      <fs_likp_lips>-lfimg_TOTAL = gs_sum-lfimg.
+    ENDIF.
+
+    READ TABLE gt_lfa1
+      INTO gs_lfa1
+      WITH KEY lifnr = <fs_likp_lips>-lifnr.
+    IF sy-subrc IS  INITIAL.
+      <fs_likp_lips>-name1     = gs_lfa1-name1.
+    ENDIF.
+
+    READ TABLE gt_usr21
+      INTO gs_usr21
+      WITH KEY bname = <fs_likp_lips>-ernam.
+    IF sy-subrc IS INITIAL.
+      <fs_likp_lips>-techdesc = gs_usr21-techdesc.
+    ENDIF.
+
+
+  ENDLOOP.
+
+
+ENDFORM.
+
+
+*PERFORM zf_layout .
+*&---------------------------------------------------------------------*
+*& Form zf_layout
+*&---------------------------------------------------------------------*
+*& text
+*&---------------------------------------------------------------------*
+*& -->  p1        text
+*& <--  p2        text
+*&---------------------------------------------------------------------*
+FORM zf_layout .
+
+  gs_layout-grid_title = 'LIGACÃO ENTRE AS TABELAS'."Titulo do Relatório
+  gs_layout-zebra      = 'X'.         "Linhas do relatório zebradas
+  gs_layout-cwidth_opt = 'X'.         "Otimização das colunas do relatório
+  gs_layout-info_fname = 'COLOR'. "Nome da coluna na tabela
+
+ENDFORM.
+
+*PERFORM zf_show_alv .
+*&---------------------------------------------------------------------*
+*& Form zf_show_alv
+*&---------------------------------------------------------------------*
+*& text
+*&---------------------------------------------------------------------*
+*& -->  p1        text
+*& <--  p2        text
+*&---------------------------------------------------------------------*
+FORM zf_fieldcat.
+
+  DATA: lt_fieldcat TYPE slis_t_fieldcat_alv.
+  DATA: ls_fieldcat TYPE slis_fieldcat_alv.
+
+  CALL FUNCTION 'REUSE_ALV_FIELDCATALOG_MERGE'
+    EXPORTING
+      i_internal_tabname     = 'gt_likp_lips'
+      i_structure_name       = 'ZST_FSW_CASE_RMORAES_LIKP_LIPS'
+    CHANGING
+      ct_fieldcat            = lt_fieldcat
+    EXCEPTIONS
+      inconsistent_interface = 1
+      program_error          = 2
+      OTHERS                 = 3.
+  IF sy-subrc = 0.
+
+    LOOP AT lt_fieldcat INTO ls_fieldcat.
+
+      gs_fieldcat-fieldname = ls_fieldcat-fieldname.
+      gs_fieldcat-tabname   = ls_fieldcat-tabname.
+      gs_fieldcat-scrtext_l = ls_fieldcat-seltext_l.
+      gs_fieldcat-scrtext_m = ls_fieldcat-seltext_m.
+      gs_fieldcat-scrtext_s = ls_fieldcat-seltext_s.
+
+      IF gs_fieldcat-fieldname = 'LFIMG_TOTAL'.
+        gs_fieldcat-scrtext_l = 'Quantidade Total'.
+        gs_fieldcat-scrtext_m = 'Quant. Total'.
+        gs_fieldcat-scrtext_s = 'Qtd. Tot'.
+      ENDIF.
+
+      IF gs_fieldcat-fieldname = 'ERNAM'.
+        gs_fieldcat-no_out = 'X'.
+      ENDIF.
+
+      APPEND gs_fieldcat TO gt_fieldcat.
+      CLEAR gs_fieldcat.
+      gs_layout-info_fname = 'COLOR'. "Nome da coluna na tabela
+    ENDLOOP.
+  ENDIF.
+
+ENDFORM.
+FORM zf_show_alv .
+
+  DATA: go_container  TYPE REF TO cl_gui_custom_container.
+  DATA: go_alv        TYPE REF TO cl_gui_alv_grid.
+
+  CREATE OBJECT go_container
+    EXPORTING
+      container_name = 'CONTAINER'.
+
+  CREATE OBJECT go_alv
+    EXPORTING
+      i_parent = go_container.
+
+  CALL METHOD go_alv->set_table_for_first_display
+    EXPORTING
+      is_layout                     = gs_layout
+    CHANGING
+      it_outtab                     = gt_likp_lips
+      it_fieldcatalog               = gt_fieldcat
+    EXCEPTIONS
+      invalid_parameter_combination = 1
+      program_error                 = 2
+      too_many_lines                = 3
+      OTHERS                        = 4.
